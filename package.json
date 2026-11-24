@@ -1,0 +1,12 @@
+{
+  "name": "runrepo",
+  "version": "0.1.0",
+  "description": "Check, fix and run any project with one command",
+  "license": "MIT",
+  "bin": { "rr": "bin/rr.js", "runrepo": "bin/rr.js" },
+  "files": ["bin", "src"],
+  "engines": { "node": ">=20" },
+  "repository": "github:yasavok/runrepo",
+  "keywords": ["cli", "dev-server", "project-runner", "developer-tools"],
+  "scripts": { "test": "node --test --test-timeout=300000" }
+}
