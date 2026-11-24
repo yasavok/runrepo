@@ -51,8 +51,8 @@ function python(dir) {
   let args = [entry], label = entry, port = null;
   if (entry === 'manage.py') { args = ['manage.py', 'runserver']; label = 'manage.py runserver'; port = 8000; }
   else if (uses('streamlit')) { args = ['-m', 'streamlit', 'run', entry]; label = 'streamlit run ' + entry; port = 8501; }
-  else if ((uses('fastapi') || uses('starlette')) && !/uvicorn\.run\(/.test(code)) { args = ['-m', 'uvicorn', mod + ':' + obj, '--reload']; label = 'uvicorn ' + mod + ':' + obj; port = 8000; }
-  else if (uses('flask') && !/\.run\(/.test(code)) { args = ['-m', 'flask', '--app', mod, 'run']; label = 'flask run'; port = 5000; }
+  else if ((uses('fastapi') || uses('starlette')) && /(FastAPI|Starlette|create_app)\(/.test(code) && !/uvicorn\.run\(/.test(code)) { args = ['-m', 'uvicorn', mod + ':' + obj, '--reload']; label = 'uvicorn ' + mod + ':' + obj; port = 8000; }
+  else if (uses('flask') && /(Flask|create_app)\(/.test(code) && !/\.run\(/.test(code)) { args = ['-m', 'flask', '--app', mod, 'run']; label = 'flask run'; port = 5000; }
   else { const m = code.match(/\bport\s*=\s*(\d{2,5})/); port = m ? +m[1] : uses('flask') ? 5000 : null; }
   const fix = tool === 'uv' ? [step('uv sync', 'uv', ['sync'])] : tool === 'poetry' ? [step('poetry install', 'poetry', ['install'])] : tool === 'pipenv' ? [step('pipenv install', 'pipenv', ['install'])]
     : [...(venv ? [] : [step('создать .venv', base, ['-m', 'venv', '.venv'], { en: 'create .venv' })]), step('pip install', py(target), req ? ['-m', 'pip', 'install', '-r', req] : ['-m', 'pip', 'install', '-e', '.'], { scripts: true })];

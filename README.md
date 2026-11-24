@@ -69,7 +69,7 @@ rr [folder]
 
 ## Status
 
-Early. Tests run on Windows, Linux and macOS. Node.js, Python, Go, Rust and .NET are started for real in tests. Java, PHP, Ruby and Docker are detected but not yet started in tests.
+Early. Tests run on Windows, Linux and macOS. Node.js, Python, Go, Rust and .NET are started for real in tests. Java, PHP, Ruby and Docker are detected but not yet started in tests. Detection was tried on 53 popular repositories.
 
 If `rr` did not understand your project, [open an issue](https://github.com/yasavok/runrepo/issues/new/choose).
 

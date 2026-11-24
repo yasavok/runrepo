@@ -26,6 +26,7 @@ test('случаи из настоящих репозиториев', () => {
   assert.match(one({ 'bin/rails': '', Gemfile: '', 'package.json': { scripts: { dev: 'vite' } } }), /^Ruby, Rails/);
   assert.strictEqual(one({ 'package.json': { name: 'lib', files: ['lib'], dependencies: { a: '1' } }, 'index.js': '' }), '');
   assert.match(one({ 'package.json': { private: true, main: 'server.js' }, 'server.js': '' }), /node server\.js/);
+  assert.match(one({ 'launch.py': 'start()', 'requirements.txt': 'fastapi' }), /\| launch\.py$/);
   assert.match(one({ 'blog.py': 'from app import create_app\napp = create_app()', 'requirements.txt': 'flask' }), /Flask \| flask run/);
   assert.match(one({ 'pyproject.toml': '[project]\nname="x"\n[project.scripts]\nmytool = "x:main"\n' }), /^Python \| mytool --help$/);
   assert.match(one({ 'Cargo.toml': '[package]\nname = "x"', 'src/bin/tool/main.rs': '' }), /\| cargo run$/);
