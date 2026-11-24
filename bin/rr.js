@@ -95,7 +95,7 @@ async function main() {
   await Promise.all(parts.map(async p => {
     const port = p.usePort || p.port;
     if (p.start.serve) { await serve(p.dir, port); url('http://localhost:' + port); return new Promise(() => {}); }
-    let c; try { c = sys.start(p.start.cmd, p.start.args, { cwd: p.dir, stdio: ['inherit', 'pipe', 'pipe'], env: { ...process.env, ...(p.usePort ? { PORT: String(p.usePort) } : {}), FORCE_COLOR: tty ? '1' : '0', PYTHONUNBUFFERED: '1' } }); } catch (e) { throw new Error(L('Не нашёл программу: ', 'Program not found: ') + e.message); }
+    let c; try { c = sys.start(p.start.cmd, p.start.args, { cwd: p.dir, stdio: ['inherit', 'pipe', 'pipe'], env: { ...process.env, ...(p.usePort ? { PORT: String(p.usePort) } : {}), ...(tty ? { FORCE_COLOR: '1' } : {}), PYTHONUNBUFFERED: '1' } }); } catch (e) { throw new Error(L('Не нашёл программу: ', 'Program not found: ') + e.message); }
     kids.push(c); let log = ''; const tag = parts.length > 1 ? dim('[' + p.name + '] ') : '';
     for (const s of ['stdout', 'stderr']) { let rest = ''; c[s].on('data', d => {
       const t = String(d); log = (log + t).slice(-20000); if (!tag) process[s].write(t); else { const lines = (rest + t).split('\n'); rest = lines.pop(); for (const l of lines) process[s].write(tag + l + '\n'); }

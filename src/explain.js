@@ -13,5 +13,5 @@ const RULES = [
   [/error NETSDK1045|does not support targeting \.NET (\S+)/, (m, L) => L('Установленный .NET SDK старше, чем нужно проекту.', 'The installed .NET SDK is older than the project needs.')],
   [/SyntaxError[^\n]*/, (m, L) => L('Ошибка в коде: ', 'Code error: ') + m[0].slice(0, 120)],
 ];
-function explain(log, L) { for (const [re, f] of RULES) { const m = log.match(re); if (m) return f(m, L).replace(/\s+([.,])/g, '$1').replace(/ {2,}/g, ' '); } return ''; }
+function explain(raw, L) { const log = raw.replace(/\x1b\[[0-9;]*m/g, ''); for (const [re, f] of RULES) { const m = log.match(re); if (m) return f(m, L).replace(/\s+([.,])/g, '$1').replace(/ {2,}/g, ' '); } return ''; }
 module.exports = { explain };

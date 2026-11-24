@@ -57,6 +57,7 @@ test('объяснения', () => {
   assert.match(explain('Error: listen EADDRINUSE: address already in use :::3000', L), /Порт 3000 занят/);
   assert.match(explain("ModuleNotFoundError: No module named 'requests'", L), /requests/);
   assert.match(explain('connect ECONNREFUSED 127.0.0.1:5432', L), /5432/);
+  assert.match(explain("\x1b[1;35mModuleNotFoundError\x1b[0m: \x1b[35mNo module named 'requests'\x1b[0m", L), /requests/);
   assert.strictEqual(explain('всё хорошо', L), '');
 });
 test('опасные аргументы в cmd не проходят', { skip: !sys.WIN }, () => assert.throws(() => sys.plan('npm', ['run', 'dev & calc'])));
