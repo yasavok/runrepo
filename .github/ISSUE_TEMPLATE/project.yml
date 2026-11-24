@@ -1,0 +1,20 @@
+name: rr did not understand a project
+description: Wrong command, missed check or a crash
+labels: [project]
+body:
+  - type: input
+    id: repo
+    attributes:
+      label: Link to the repository, if it is public
+  - type: textarea
+    id: output
+    attributes:
+      label: Output of rr --check
+      description: Remove anything private
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: How the project really starts
