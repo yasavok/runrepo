@@ -19,7 +19,8 @@ function node(dir) {
   const pm = named ? named[1] : has(dir, 'pnpm-lock.yaml') ? 'pnpm' : has(dir, 'yarn.lock') ? 'yarn' : has(dir, 'bun.lock') || has(dir, 'bun.lockb') ? 'bun' : 'npm';
   const script = ['dev', 'start:dev', 'develop', 'start', 'serve'].find(s => scripts[s]);
   const main = [p.main, 'index.js', 'server.js', 'app.js'].find(f => f && has(dir, f) && /\.[cm]?js$/.test(f));
-  if (!script && !(main && (p.main || Object.keys(deps).length))) return Object.keys(scripts).length || p.workspaces || p.bin ? null : null;
+  const library = p.files || p.exports || p.types || p.publishConfig;
+  if (!script && (library || !main || !(p.main || Object.keys(deps).length))) return null;
   const lock = { npm: 'package-lock.json', pnpm: 'pnpm-lock.yaml', yarn: 'yarn.lock', bun: has(dir, 'bun.lock') ? 'bun.lock' : 'bun.lockb' }[pm];
   const needs = Object.keys(deps).length > 0, modules = has(dir, 'node_modules') || has(dir, '.pnp.cjs');
   const stale = modules && pm === 'npm' && mtime(dir, 'node_modules/.package-lock.json') > 0 && mtime(dir, lock) > mtime(dir, 'node_modules/.package-lock.json') + 2000;
@@ -37,14 +38,16 @@ function node(dir) {
 // ----- Python
 function python(dir) {
   const req = ['requirements.txt', 'requirements/dev.txt', 'requirements/base.txt'].find(f => has(dir, f)), toml = text(dir, 'pyproject.toml');
-  const entry = ['manage.py', 'main.py', 'app.py', 'run.py', 'server.py', 'wsgi.py', '__main__.py', 'src/main.py', 'app/main.py'].find(f => has(dir, f));
-  if (!req && !toml && !has(dir, 'Pipfile') && !(entry && entry !== '__main__.py')) return null;
-  if (!entry) return null;
+  const entry = ['manage.py', 'main.py', 'app.py', 'run.py', 'server.py', 'launch.py', 'webui.py', 'wsgi.py', 'src/main.py', 'app/main.py'].find(f => has(dir, f))
+    || list(dir).map(f => f.name).filter(f => /^\w+\.py$/.test(f) && !/^(setup|conftest|config|test_.*|.*_test)\.py$/.test(f)).find(f => /^(app|application|server)\s*=\s*(Flask|FastAPI|create_app|Starlette)\(/m.test(text(dir, f)));
+  const command = entry ? null : ((toml.match(/^\[(?:project|tool\.poetry)\.scripts\]\s*\n\s*["']?([\w.-]+)["']?\s*=/m) || [])[1]);
+  if (!entry && !command) return null;
   const win = process.platform === 'win32', venv = ['.venv', 'venv', 'env'].find(v => has(dir, v + (win ? '/Scripts/python.exe' : '/bin/python')));
   const base = win ? (which('py') ? 'py' : 'python') : which('python3') ? 'python3' : 'python', tool = has(dir, 'uv.lock') ? 'uv' : has(dir, 'poetry.lock') || /\[tool\.poetry\]/.test(toml) ? 'poetry' : has(dir, 'Pipfile') ? 'pipenv' : null;
-  const all = (req ? text(dir, req) : '') + toml + text(dir, 'Pipfile'), uses = n => new RegExp('(^|[^\\w-])' + n + '($|[^\\w-])', 'im').test(all), code = text(dir, entry);
+  const all = (req ? text(dir, req) : '') + toml + text(dir, 'Pipfile'), uses = n => new RegExp('(^|[^\\w-])' + n + '($|[^\\w-])', 'im').test(all), code = entry ? text(dir, entry) : '';
   const py = v => path.join(dir, v, win ? 'Scripts/python.exe' : 'bin/python'), target = venv || '.venv', external = req || toml || tool;
-  const mod = entry.replace(/\.py$/, '').replace(/\//g, '.'), obj = (code.match(/^(\w+)\s*(?::\s*\w+\s*)?=\s*(?:FastAPI|Flask|Starlette)\(/m) || [])[1] || 'app';
+  if (command) { const bin = path.join(dir, venv || '.venv', win ? 'Scripts/' + command + '.exe' : 'bin/' + command); return { kind: 'Python', need: { cmd: base, range: ((toml.match(/requires-python\s*=\s*["']([^"']+)/) || [])[1]) || '' }, tool, deps: { ok: tool ? tool === 'uv' && has(dir, '.venv') : !!venv && fs.existsSync(bin), why: 'missing', fix: tool ? [step(tool === 'uv' ? 'uv sync' : tool + ' install', tool, [tool === 'uv' ? 'sync' : 'install'])] : [...(venv ? [] : [step('создать .venv', base, ['-m', 'venv', '.venv'], { en: 'create .venv' })]), step('pip install', path.join(dir, venv || '.venv', win ? 'Scripts/python.exe' : 'bin/python'), ['-m', 'pip', 'install', '-e', '.'], { scripts: true })] }, start: tool ? step(command + ' --help', tool, ['run', command, '--help']) : step(command + ' --help', bin, ['--help']), cli: true }; }
+  const mod = entry.replace(/\.py$/, '').replace(/\//g, '.'), obj = (code.match(/^(\w+)\s*(?::\s*\w+\s*)?=\s*(?:FastAPI|Flask|Starlette|create_app)\(/m) || [])[1] || 'app';
   let args = [entry], label = entry, port = null;
   if (entry === 'manage.py') { args = ['manage.py', 'runserver']; label = 'manage.py runserver'; port = 8000; }
   else if (uses('streamlit')) { args = ['-m', 'streamlit', 'run', entry]; label = 'streamlit run ' + entry; port = 8501; }
@@ -66,14 +69,18 @@ function go(dir) {
   return { kind: 'Go', need: { cmd: 'go', range: ((text(dir, 'go.mod').match(/^go (\S+)/m) || [])[1] || '').replace(/^(.+)$/, '>=$1') }, start: step('go run ' + t, 'go', ['run', t]) };
 }
 function rust(dir) {
-  const t = text(dir, 'Cargo.toml'); if (!t || !(has(dir, 'src/main.rs') || /\[\[bin\]\]|\[workspace\]/.test(t))) return null;
-  return { kind: 'Rust', need: { cmd: 'cargo', range: '' }, start: step('cargo run', 'cargo', ['run']) };
+  const t = text(dir, 'Cargo.toml'); if (!t || !/^\[package\]/m.test(t)) return null;
+  const bins = [...t.matchAll(/\[\[bin\]\][^[]*?name\s*=\s*"([\w-]+)"/g)].map(m => m[1]), inBin = list(path.join(dir, 'src/bin')).map(f => f.name.replace(/\.rs$/, '')).filter(n => /^[\w-]+$/.test(n));
+  const all = [...new Set([...bins, ...(bins.length ? [] : inBin)])]; if (!has(dir, 'src/main.rs') && !all.length) return null;
+  const many = !/default-run/.test(t) && all.length + (has(dir, 'src/main.rs') ? 1 : 0) > 1, pick = many && (has(dir, 'src/main.rs') ? (t.match(/^name\s*=\s*"([\w-]+)"/m) || [])[1] : all.find(n => /server/.test(n)) || all[0]), args = pick ? ['run', '--bin', pick] : ['run'];
+  return { kind: 'Rust', need: { cmd: 'cargo', range: ((t.match(/^rust-version\s*=\s*"([\d.]+)"/m) || [])[1] || '').replace(/^(.+)$/, '>=$1') }, start: step('cargo ' + args.join(' '), 'cargo', args) };
 }
 function dotnet(dir) {
   const found = []; const scan = (d, depth) => { for (const f of list(d)) { if (f.isDirectory()) { if (depth && !/^(\.|bin$|obj$|node_modules$)|test/i.test(f.name)) scan(path.join(d, f.name), depth - 1); } else if (/\.(cs|fs)proj$/.test(f.name)) found.push(path.join(d, f.name)); } };
   if (!list(dir).some(f => /\.(sln|slnx|csproj|fsproj)$/.test(f.name))) return null; scan(dir, 3);
   const runnable = found.filter(f => /Sdk\.Web|<OutputType>\s*(Win)?Exe/i.test(fs.readFileSync(f, 'utf8'))); if (!runnable.length) return null;
-  const pick = runnable.find(f => /Sdk\.Web/.test(fs.readFileSync(f, 'utf8'))) || runnable[0], pd = path.dirname(pick), rel = path.relative(dir, pick), tf = (fs.readFileSync(pick, 'utf8').match(/<TargetFrameworks?>net(\d+)\.0/) || [])[1];
+  const weight = f => { const n = path.basename(f), c = fs.readFileSync(f, 'utf8'), web = /Sdk\.Web/.test(c); return (/AppHost/i.test(n) || /Aspire\.AppHost/.test(c) ? 0 : web && /(^|\.)web(app|ui|site)?\./i.test(n) ? 10 : web ? 20 : 30) + (/sample|minimal|demo|benchmark/i.test(path.relative(dir, f)) ? 15 : 0) + path.relative(dir, f).split(path.sep).length / 10; };
+  const pick = [...runnable].sort((a, b) => weight(a) - weight(b) || (a < b ? -1 : 1))[0], pd = path.dirname(pick), rel = path.relative(dir, pick), tf = (fs.readFileSync(pick, 'utf8').match(/<TargetFrameworks?>net(\d+)\.0/) || [])[1];
   const urls = text(pd, 'Properties/launchSettings.json').match(/http:\/\/localhost:(\d+)/);
   return { kind: '.NET' + (/Sdk\.Web/.test(fs.readFileSync(pick, 'utf8')) ? ', ASP.NET' : ''), need: { cmd: 'dotnet', range: tf ? '>=' + tf : '' }, deps: { ok: fs.existsSync(path.join(pd, 'obj/project.assets.json')), why: 'missing', fix: step('dotnet restore', 'dotnet', ['restore', rel]) }, start: step('dotnet run --project ' + rel, 'dotnet', ['run', '--project', rel]), port: urls ? +urls[1] : null, portFixed: true };
 }
@@ -83,25 +90,29 @@ function java(dir) {
   if (has(dir, 'build.gradle') || has(dir, 'build.gradle.kts')) { const w = has(dir, win ? 'gradlew.bat' : 'gradlew'), t = spring ? 'bootRun' : 'run'; if (!spring && !/application/.test(text(dir, 'build.gradle') + text(dir, 'build.gradle.kts'))) return null; return { kind: 'Java, Gradle', need: { cmd: 'java', range: '' }, tool: w ? null : 'gradle', start: step('gradle ' + t, w ? path.join(dir, win ? 'gradlew.bat' : 'gradlew') : 'gradle', [t]), port: spring ? 8080 : null, portFixed: true }; }
   return null;
 }
-function php(dir) { if (!has(dir, 'artisan')) return null; return { kind: 'PHP, Laravel', need: { cmd: 'php', range: '' }, tool: 'composer', deps: { ok: has(dir, 'vendor/autoload.php'), why: 'missing', fix: step('composer install', 'composer', ['install'], { scripts: true }) }, start: step('php artisan serve', 'php', ['artisan', 'serve']), port: 8000, portFixed: true }; }
+function php(dir) { if (!has(dir, 'artisan')) return null; return { kind: 'PHP, Laravel', need: { cmd: 'php', range: '' }, tool: 'composer', deps: { ok: has(dir, 'vendor/autoload.php'), why: 'missing', fix: step('composer install', 'composer', ['install'], { scripts: true }) }, start: (json(dir, 'composer.json') || {}).scripts && json(dir, 'composer.json').scripts.dev ? step('composer run dev', 'composer', ['run', 'dev']) : step('php artisan serve', 'php', ['artisan', 'serve']), laravel: true, port: 8000, portFixed: true }; }
 function rails(dir) { if (!has(dir, 'bin/rails') || !has(dir, 'Gemfile')) return null; return { kind: 'Ruby, Rails', need: { cmd: 'ruby', range: '' }, tool: 'bundle', start: step('rails server', 'ruby', ['bin/rails', 'server']), deps: { ok: true }, port: 3000, portFixed: true }; }
 function compose(dir) { const f = COMPOSE.find(x => has(dir, x)); return f ? { kind: 'Docker Compose', need: { cmd: 'docker', range: '' }, start: step('docker compose up', 'docker', ['compose', 'up']), docker: true } : null; }
 function still(dir) { return has(dir, 'index.html') ? { kind: 'HTML', need: null, start: { title: 'встроенный сервер', en: 'built-in server', serve: true }, port: 8080, envPort: true } : null; }
 
 const COMPOSE = ['compose.yaml', 'compose.yml', 'docker-compose.yml', 'docker-compose.yaml'];
-const ORDER = [node, dotnet, php, rails, python, go, rust, java];
+const ORDER = [php, rails, node, dotnet, python, go, rust, java];
 const one = dir => { for (const d of ORDER) { const p = d(dir); if (p) return { dir, ...p }; } return null; };
 const SUB = /^(apps?|api|backend|back|client|frontend|front|server|services?|site|src|ui|web|website)$/i, SKIP = /^(\.|node_modules$|dist$|build$|vendor$|target$|docs?$|tests?$|examples?$)/i;
 
 // корень важнее вложенных; если корень не запускается, ищем части проекта
 function detect(dir) {
-  const top = one(dir); if (top) return [{ ...top, name: path.basename(dir) }];
+  const top = one(dir);
+  if (top) {
+    const lang = p => p.kind.split(',')[0], other = list(dir).filter(d => d.isDirectory() && (/^Node/.test(top.kind) ? /^(backend|server|api)$/i : /^(frontend|client|web|ui)$/i).test(d.name)).map(d => ({ d, p: one(path.join(dir, d.name)) })).filter(x => x.p && !x.p.cli && lang(x.p) !== lang(top) && !top.laravel && !/Rails/.test(top.kind));
+    return [{ ...top, name: path.basename(dir) }, ...other.slice(0, 2).map(x => ({ ...x.p, name: x.d.name }))];
+  }
   const parts = [];
   for (const d of list(dir)) if (d.isDirectory() && !SKIP.test(d.name)) {
     const p = one(path.join(dir, d.name)); if (p) parts.push({ ...p, name: d.name, known: SUB.test(d.name) });
     else if (/^(apps|packages|services)$/i.test(d.name)) for (const e of list(path.join(dir, d.name))) if (e.isDirectory() && !SKIP.test(e.name)) { const q = one(path.join(dir, d.name, e.name)); if (q) parts.push({ ...q, name: d.name + '/' + e.name, known: true }); }
   }
-  const known = parts.filter(p => p.known); if (known.length) return known.slice(0, 4); if (parts.length) return parts.slice(0, 4);
-  const c = compose(dir) || still(dir); return c ? [{ dir, name: path.basename(dir), ...c }] : [];
+  const known = parts.filter(p => p.known), c0 = compose(dir); if (known.length) return known.slice(0, 4); if (parts.length && !(c0 && which('docker'))) return parts.slice(0, 4);
+  const c = c0 || still(dir); return c ? [{ dir, name: path.basename(dir), ...c }] : [];
 }
 module.exports = { detect, COMPOSE, text, has, list, versionOk };

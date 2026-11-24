@@ -19,6 +19,22 @@ test('распознаёт проекты', () => {
   assert.match(kind({ 'index.html': '' }), /HTML/);
   assert.strictEqual(kind({ 'notes.txt': '' }), '');
 });
+test('случаи из настоящих репозиториев', () => {
+  const one = f => detect(project(f)).map(p => p.kind + ' | ' + p.start.title).join('; '), web = '<Project Sdk="Microsoft.NET.Sdk.Web"/>';
+  assert.match(one({ artisan: '', 'composer.json': { scripts: { dev: ['x'] } }, 'package.json': { scripts: { dev: 'vite' } } }), /^PHP, Laravel \| composer run dev$/);
+  assert.match(one({ artisan: '', 'composer.json': {}, 'package.json': { scripts: { dev: 'x' } } }), /^PHP, Laravel \| php artisan serve$/);
+  assert.match(one({ 'bin/rails': '', Gemfile: '', 'package.json': { scripts: { dev: 'vite' } } }), /^Ruby, Rails/);
+  assert.strictEqual(one({ 'package.json': { name: 'lib', files: ['lib'], dependencies: { a: '1' } }, 'index.js': '' }), '');
+  assert.match(one({ 'package.json': { private: true, main: 'server.js' }, 'server.js': '' }), /node server\.js/);
+  assert.match(one({ 'blog.py': 'from app import create_app\napp = create_app()', 'requirements.txt': 'flask' }), /Flask \| flask run/);
+  assert.match(one({ 'pyproject.toml': '[project]\nname="x"\n[project.scripts]\nmytool = "x:main"\n' }), /^Python \| mytool --help$/);
+  assert.match(one({ 'Cargo.toml': '[package]\nname = "x"', 'src/bin/tool/main.rs': '' }), /\| cargo run$/);
+  assert.match(one({ 'Cargo.toml': '[package]\nname = "x"\n[[bin]]\nname = "x-cli"\npath = "a"\n[[bin]]\nname = "x-server"\npath = "b"' }), /--bin x-server$/);
+  assert.match(one({ 'A.sln': '', 'src/Api/Api.csproj': web, 'src/Web/Web.csproj': web }), /Web\.csproj$/);
+  assert.match(one({ 'A.sln': '', 'src/Web/Web.csproj': web, 'src/App.AppHost/App.AppHost.csproj': '<Project Sdk="Microsoft.NET.Sdk"><OutputType>Exe</OutputType></Project>' }), /AppHost\.csproj$/);
+  assert.match(one({ 'package.json': { scripts: { dev: 'x' } }, 'backend/app/main.py': 'app = FastAPI()', 'backend/requirements.txt': 'fastapi' }), /Node\.js.*; Python, FastAPI/);
+  assert.match(one({ 'go.mod': 'module x', 'main.go': 'package main', 'web/package.json': { scripts: { dev: 'vite' } } }), /^Go .*; Node\.js/);
+});
 test('находит части проекта', () => { assert.deepStrictEqual(detect(project({ 'frontend/package.json': { scripts: { dev: 'vite' } }, 'backend/manage.py': '', 'backend/requirements.txt': '', 'docs/package.json': { scripts: { dev: 'x' } } })).map(p => p.name).sort(), ['backend', 'frontend']); });
 test('сломанный package.json не роняет', () => assert.deepStrictEqual(detect(project({ 'package.json': '{oops' })), []));
 test('порт из скрипта, конфига и фреймворка', () => {

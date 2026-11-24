@@ -64,7 +64,7 @@ async function main() {
   let parts = detect(dir); if (o.only) parts = parts.filter(p => p.name === o.only);
   if (!parts.length) { if (o.json) console.log('[]'); throw new Error(L('Не понял, как запускать этот проект. Посмотри README.', 'Could not tell how to run this project. See its README.')); }
   for (const p of parts) p.items = await check(p, dir, L);
-  if (o.json) return console.log(JSON.stringify(parts.map(p => ({ name: p.name, kind: p.kind, start: p.start.title, items: p.items.map(({ id, state, title, note, fix }) => ({ id, state, title, note, fix: (fix || []).map(s => s.title) })) })), null, 2));
+  if (o.json) return console.log(JSON.stringify(parts.map(p => ({ name: p.name, kind: p.kind, start: o.lang === 'en' && p.start.en ? p.start.en : p.start.title, items: p.items.map(({ id, state, title, note, fix }) => ({ id, state, title, note, fix: (fix || []).map(s => o.lang === 'en' && s.en ? s.en : s.title) })) })), null, 2));
 
   const word = s => o.lang === 'en' && s.en ? s.en : s.title, fixes = [];
   for (const p of parts) {

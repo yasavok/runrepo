@@ -56,7 +56,7 @@ async function check(p, rootDir, L) {
   const sample = SAMPLES.find(f => has(p.dir, f)); let env = parseEnv(text(p.dir, '.env') + '\n' + text(p.dir, '.env.local'));
   if (sample && !has(p.dir, '.env') && !has(p.dir, '.env.local')) {
     env = parseEnv(text(p.dir, sample)); const empty = [...env].filter(([, v]) => !v || /^(your|change|xxx|todo|<)/i.test(v)).map(([k]) => k);
-    add('env', 'fix', '.env', L('нет файла', 'missing') + (empty.length ? L(', заполни потом: ', ', fill in later: ') + empty.slice(0, 5).join(', ') : ''), [{ title: L('создать .env из ', 'create .env from ') + sample, copy: [path.join(p.dir, sample), path.join(p.dir, '.env')] }]);
+    add('env', 'fix', '.env', L('нет файла', 'missing') + (empty.length ? L(', заполни потом: ', ', fill in later: ') + empty.slice(0, 5).join(', ') : ''), [{ title: L('создать .env из ', 'create .env from ') + sample, copy: [path.join(p.dir, sample), path.join(p.dir, '.env')] }, ...(p.laravel && env.has('APP_KEY') && !env.get('APP_KEY') ? [{ title: 'php artisan key:generate', cmd: 'php', args: ['artisan', 'key:generate'] }] : [])]);
   } else if (sample) {
     const miss = [...parseEnv(text(p.dir, sample)).keys()].filter(k => !env.has(k) && !(k in process.env));
     if (miss.length) add('env', 'warn', '.env', L('не хватает: ', 'missing: ') + miss.slice(0, 6).join(', ')); else add('env', 'ok', '.env');
@@ -72,7 +72,7 @@ async function check(p, rootDir, L) {
   }
   // базы данных
   const services = composeServices(rootDir);
-  for (const d of databases(env)) {
+  for (const d of databases(p.dir === rootDir ? env : new Map([...parseEnv(text(rootDir, '.env')), ...env]))) {
     if (await reachable(d.port)) { add('db', 'ok', d.name, L('отвечает', 'responds')); continue; }
     const key = d.name.toLowerCase().slice(0, 5), s = services.find(x => x.image.toLowerCase().includes(key));
     if (s && which('docker')) add('db', 'fix', d.name, L('не запущен', 'not running'), [{ title: 'docker compose up -d ' + s.name, cmd: 'docker', args: ['compose', 'up', '-d', s.name], cwd: rootDir }]);
